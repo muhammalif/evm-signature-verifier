@@ -77,8 +77,8 @@ contract SignatureVerifier {
         }
 
         // Anti-malleability check: secp256k1 curve order / 2
-        // s must be in the lower half of the curve order
-        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+        // s must be non-zero and in the lower half of the curve order conforming to EIP-2
+        if (uint256(s) == 0 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
             revert InvalidSignatureSValue();
         }
 
@@ -95,7 +95,7 @@ contract SignatureVerifier {
     }
 
     /**
-     * @notice Verifies and consumes a signed authorization.
+     * @notice Verifies and consumes a signed authorization using sequential nonce.
      */
     function verifyAndExecute(
         address expectedSigner,
@@ -104,15 +104,33 @@ contract SignatureVerifier {
         uint256 deadline,
         bytes memory signature
     ) external returns (bool) {
-        if (block.timestamp > deadline) {
+        uint256 currentNonce = userNonces[expectedSigner];
+        return verifyAndExecute(expectedSigner, recipient, amount, currentNonce, deadline, signature);
+    }
+
+    /**
+     * @notice Verifies and consumes a signed authorization with explicit nonce and replay protection.
+     */
+    function verifyAndExecute(
+        address expectedSigner,
+        address recipient,
+        uint256 amount,
+        uint256 nonce,
+        uint256 deadline,
+        bytes memory signature
+    ) public returns (bool) {
+        if (deadline == 0 || block.timestamp > deadline) {
             revert SignatureExpired();
         }
 
-        uint256 currentNonce = userNonces[expectedSigner]++;
-        bytes32 digest = hashAuthorization(expectedSigner, recipient, amount, currentNonce, deadline);
+        bytes32 digest = hashAuthorization(expectedSigner, recipient, amount, nonce, deadline);
 
         if (executedHashes[digest]) {
             revert SignatureAlreadyExecuted();
+        }
+
+        if (nonce != userNonces[expectedSigner]) {
+            revert InvalidSigner();
         }
 
         address recovered = recoverSigner(digest, signature);
@@ -120,6 +138,7 @@ contract SignatureVerifier {
             revert InvalidSigner();
         }
 
+        userNonces[expectedSigner]++;
         executedHashes[digest] = true;
         emit SignatureExecuted(digest, expectedSigner);
 
