@@ -26,6 +26,7 @@ contract SignatureVerifier {
     error SignatureExpired();
     error SignatureAlreadyExecuted();
     error InvalidSigner();
+    error InvalidRecipient();
 
     event SignatureExecuted(bytes32 indexed digest, address indexed signer);
 
@@ -104,6 +105,10 @@ contract SignatureVerifier {
         uint256 deadline,
         bytes memory signature
     ) external returns (bool) {
+        if (recipient == address(0)) {
+            revert InvalidRecipient();
+        }
+
         if (block.timestamp > deadline) {
             revert SignatureExpired();
         }
