@@ -8,3 +8,11 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
     "@openzeppelin/=lib/openzeppelin-contracts/"
 ]
+
+# Stateful-invariant budget. Kept modest so the suite is deterministic and fast
+# on shared CI runners (the handler builds unbounded dynamic arrays).
+[invariant]
+runs = 8
+depth = 60
+fail_on_revert = false
+
