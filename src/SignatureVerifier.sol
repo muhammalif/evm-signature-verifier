@@ -77,12 +77,13 @@ contract SignatureVerifier {
             v := byte(0, mload(add(signature, 0x60)))
         }
 
-        // Anti-malleability check: secp256k1 curve order / 2
-        // s must be in the lower half of the curve order
+        // EIP-2 strict anti-malleability check: secp256k1 curve order / 2
+        // Lower s-value constraint: s <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
         if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
             revert InvalidSignatureSValue();
         }
 
+        // Standard v-value validation (27 or 28 for legacy/EIP-155 uncompressed ECDSA)
         if (v != 27 && v != 28) {
             revert InvalidSignatureVValue();
         }
@@ -96,7 +97,13 @@ contract SignatureVerifier {
     }
 
     /**
-     * @notice Verifies and consumes a signed authorization.
+     * @notice Verifies and consumes a signed authorization with multi-layered security guards.
+     * @dev Enforces:
+     *      1. Non-zero recipient address check
+     *      2. Strict timestamp deadline validation (anti-stale)
+     *      3. Per-signer monotonic nonce increment
+     *      4. Unique digest replay prevention via executedHashes registry
+     *      5. Cryptographic EIP-712 / EIP-2 low-s signature recovery
      */
     function verifyAndExecute(
         address expectedSigner,
@@ -105,17 +112,24 @@ contract SignatureVerifier {
         uint256 deadline,
         bytes memory signature
     ) external returns (bool) {
+        if (expectedSigner == address(0)) {
+            revert InvalidSigner();
+        }
+
         if (recipient == address(0)) {
             revert InvalidRecipient();
         }
 
+        // Deadline expiration check
         if (block.timestamp > deadline) {
             revert SignatureExpired();
         }
 
+        // Monotonic per-user nonce tracking for sequential replay protection
         uint256 currentNonce = userNonces[expectedSigner]++;
         bytes32 digest = hashAuthorization(expectedSigner, recipient, amount, currentNonce, deadline);
 
+        // Digest-level on-chain execution guard
         if (executedHashes[digest]) {
             revert SignatureAlreadyExecuted();
         }
