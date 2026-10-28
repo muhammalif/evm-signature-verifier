@@ -77,8 +77,8 @@ contract SignatureVerifier {
         }
 
         // Anti-malleability check: secp256k1 curve order / 2
-        // s must be in the lower half of the curve order
-        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+        // s must be non-zero and in the lower half of the curve order (EIP-2)
+        if (uint256(s) == 0 || uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
             revert InvalidSignatureSValue();
         }
 
@@ -104,7 +104,11 @@ contract SignatureVerifier {
         uint256 deadline,
         bytes memory signature
     ) external returns (bool) {
-        if (block.timestamp > deadline) {
+        if (expectedSigner == address(0)) {
+            revert InvalidSigner();
+        }
+
+        if (deadline == 0 || block.timestamp > deadline) {
             revert SignatureExpired();
         }
 

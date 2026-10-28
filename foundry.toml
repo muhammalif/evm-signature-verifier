@@ -8,3 +8,11 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
     "@openzeppelin/=lib/openzeppelin-contracts/"
 ]
+
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 16
+depth = 32
+fail_on_revert = false
